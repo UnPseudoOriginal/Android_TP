@@ -1,11 +1,19 @@
 package fr.esme.esme_map
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothClass
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanResult
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.location.Location
 import android.os.Bundle
+import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
@@ -21,7 +29,6 @@ import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.gson.Gson
-import com.squareup.picasso.Picasso
 import fr.esme.esme_map.dao.AppDatabase
 import fr.esme.esme_map.interfaces.UserClickInterface
 import fr.esme.esme_map.model.POI
@@ -33,12 +40,18 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, UserClickInterface
     private val TAG = MainActivity::class.qualifiedName
     private lateinit var mMap: GoogleMap
     private lateinit var viewModel: MainActivityViewModel
-    private var isFriendShow = true
+    private var isFriendShow = false
 
 
     private val POI_ACTIVITY = 1
     private val USER_ACTIVITY = 2
+    private val DEVICES_ACTIVITY = 3
     private lateinit var fusedLocationClient : FusedLocationProviderClient
+
+
+
+
+
 
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
@@ -50,12 +63,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, UserClickInterface
             val intent = Intent(this, CreatePOIActivity::class.java).apply {
                 putExtra("LATLNG", it)
             }
-
             startActivityForResult(intent, POI_ACTIVITY)
-
-
         }
-
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -64,21 +73,44 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, UserClickInterface
         if (requestCode == POI_ACTIVITY) {
             var t = data?.getStringExtra("poi")
             var poi = Gson().fromJson<POI>(t, POI::class.java)
-            viewModel.savePOI(poi)
-            showPOI(Gson().fromJson<POI>(t, POI::class.java))
+            if (poi != null){
+                viewModel.savePOI(poi)
+                showPOI(Gson().fromJson<POI>(t, POI::class.java))
+            }
         }
     }
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
+
         super.onCreate(savedInstanceState)
         Log.d(TAG, "onCreate")
 
+        // Initializes Bluetooth adapter
+        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        val bluetoothAdapter = bluetoothManager.adapter
+        val REQUEST_ENABLE_BT = 1
+
+        // Ensures Bluetooth is available on the device and it is enabled. If not,
+        // displays a dialog requesting user permission to enable Bluetooth.
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
+            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT)
+        }
+
         setContentView(R.layout.activity_main)
 
-        //button
+        //button friends
         findViewById<FloatingActionButton>(R.id.showFriendsButton).setOnClickListener {
             manageUserVisibility()
+        }
+
+        //button devices
+        findViewById<FloatingActionButton>(R.id.showDevicesButton).setOnClickListener {
+            val intent = Intent(this, DevicesActivity::class.java).apply {
+
+            }
+            startActivity(intent)
         }
 
         //MAP
@@ -145,6 +177,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, UserClickInterface
             locationCallback,
             Looper.getMainLooper()
         )
+
+
+
     }
 
     //TODO show POI
@@ -199,11 +234,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, UserClickInterface
             isFriendShow = true
 
             var friends = viewModel.getUsers()
-
             val adapter = FriendsAdapter(this, ArrayList(friends))
             findViewById<ListView>(R.id.friendsListRecyclerview).adapter = adapter
-
-
             findViewById<ListView>(R.id.friendsListRecyclerview).visibility = View.VISIBLE
         }
     }
@@ -245,13 +277,16 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, UserClickInterface
 
         Log.d("ADAPTER", user.username)
 
-        val intent = Intent(this, UserActivity::class.java).apply {
+        val intent = Intent(this, DevicesActivity::class.java).apply {
             putExtra("USER", Gson().toJson(user))
         }
 
-        startActivityForResult(intent, USER_ACTIVITY)
-
-
+        startActivityForResult(intent, DEVICES_ACTIVITY)
 
     }
+
+
+
+
+
 }
